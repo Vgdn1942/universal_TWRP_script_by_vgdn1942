@@ -1,0 +1,91 @@
+#!/sbin/sh
+
+OUTFD=$2
+ZIP=$3
+
+# functions
+ui_print() {
+  echo -n -e "ui_print $1\n" > /proc/self/fd/$OUTFD
+  echo -n -e "ui_print\n" > /proc/self/fd/$OUTFD
+}
+
+replace_resource() {
+  ui_print "Replace resources"
+  for f in res/*; do
+    if [ -d "$f" ]; then
+      app=$(basename "$f")
+      ui_print "Found folder $app"
+      apk=$(find /system -type f -name "$app.apk")
+      if [ -n "$apk" ]; then
+        ui_print "Found $apk"
+        cd "$f" || exit 1
+        /tmp/install/bin/zip -r "$apk" * >> /dev/null 2>&1
+        cd - || exit 1
+        chmod 0644 "$apk"
+      else
+        ui_print "$app.apk not found"
+        continue
+      fi
+    fi
+  done
+}
+
+remove_files() {
+  ui_print "Remove package"
+  for i in `cat /tmp/install/remove.txt`; do rm -rf "$i"; done
+}
+
+copy_libs() {
+# x86 - lib/x86/
+# arm - lib/armeabi-v7a/
+# arm64 - lib/arm64-v8a/
+  ui_print "Copy libs"
+  for a in `find /tmp/install/system/*app -type f | cut -d '/' -f 1-`; do
+    if unzip -l $a | grep -q lib/arm64-v8a; then
+      mkdir -p /tmp/install/system/lib64
+      unzip -xjo $a "lib/arm64-v8a/*" -d /tmp/install/system/lib64
+    elif unzip -l $a | grep -q lib/armeabi-v7a; then
+      mkdir -p /tmp/install/system/lib
+      unzip -xjo $a "lib/armeabi-v7a/*" -d /tmp/install/system/lib
+    fi
+  done
+}
+
+copy_files() {
+  ui_print "Copy package"
+  cp -R /tmp/install/system/* /system
+}
+
+set_perm() {
+  ui_print "Set permission"
+  for p in `find /tmp/install/system -type f | cut -d '/' -f 4-`; do chmod 0644 /"$p"; done
+}
+
+ui_print "Create temp directory"
+mkdir -p /tmp/install
+cd /tmp/install || exit 1
+ui_print "Unzip arhive"
+unzip -o "$ZIP"
+chmod -R 0755 /tmp/install/bin
+#############################################
+ui_print "Mount /system"
+mount /system
+#############################################
+replace_resource
+remove_files
+# WARNING!
+# do not change the order of calling these functions!
+copy_libs
+copy_files
+set_perm
+# WARNING!
+#############################################
+ui_print "Unmount /system"
+umount /system
+#############################################
+ui_print "Clean"
+cd || exit 1
+rm -rf /tmp/install
+#############################################
+ui_print "Complete!"
+exit 0
