@@ -36,19 +36,28 @@ remove_files() {
 }
 
 copy_libs() {
-# x86 - lib/x86/
 # arm - lib/armeabi-v7a/
 # arm64 - lib/arm64-v8a/
   ui_print "Copy libs"
+  ARCH=`grep -r "ro.product.cpu.abilist=" /system/build.prop | cut -d '=' -f 2-`
+  if echo $ARCH | grep -q arm64-v8a; then
+    for a in `find /tmp/install/system/*app -type f | cut -d '/' -f 1-`; do
+      if unzip -l $a | grep -q lib/arm64-v8a; then
+        mkdir -p /tmp/install/system/lib64
+        unzip -xjo $a "lib/arm64-v8a/*" -d /tmp/install/system/lib64
+      elif unzip -l $a | grep -q lib/armeabi-v7a; then
+        mkdir -p /tmp/install/system/lib
+        unzip -xjo $a "lib/armeabi-v7a/*" -d /tmp/install/system/lib
+      fi
+    done
+  else
   for a in `find /tmp/install/system/*app -type f | cut -d '/' -f 1-`; do
-    if unzip -l $a | grep -q lib/arm64-v8a; then
-      mkdir -p /tmp/install/system/lib64
-      unzip -xjo $a "lib/arm64-v8a/*" -d /tmp/install/system/lib64
-    elif unzip -l $a | grep -q lib/armeabi-v7a; then
+    if unzip -l $a | grep -q lib/armeabi-v7a; then
       mkdir -p /tmp/install/system/lib
       unzip -xjo $a "lib/armeabi-v7a/*" -d /tmp/install/system/lib
     fi
   done
+  fi
 }
 
 copy_files() {
